@@ -13,7 +13,8 @@ namespace testingus
 			public string PublicValue = "This property is public and will be Serialized.";
 			public bool TestBoolValue = true;
 			public bool[] TestBoolArray = { true, false, true };
-			public TestClassSecond() { }
+			public TestClassSecond()
+			{ }
 		}
 	
 }

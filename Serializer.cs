@@ -58,12 +58,19 @@ namespace namspone
 	{
 		static void Main()
 		{
+			TestClass testcloss = new TestClass();
+			testcloss.TestFloat = 52.50f;
 			Stopwatch stopwatch = Stopwatch.StartNew();
-			NFile nfil = new NFile(new TestClass());
+			NFile nfil = new NFile(testcloss);
 			nfil.Save("test", "test");
 			stopwatch.Stop();
 			Console.WriteLine(nfil.fileString);
 			Console.WriteLine("" + stopwatch.Elapsed.TotalSeconds + "s taken to serialize.");
+			stopwatch.Restart();
+			object woah = NFile.Deserialize(nfil.fileString);
+			stopwatch.Stop();
+			Console.WriteLine(((TestClass)woah).TestFloat);
+			Console.WriteLine("" + stopwatch.Elapsed.TotalSeconds + "s taken to deserialize.");
 		}
 	}
 
@@ -73,9 +80,276 @@ namespace namspone
 		internal List<NObject> objects;
 		internal List<object> propertyList = new();
 		internal String fileString = "";
-		internal bool instring = false;
 
-		protected bool isStandardType(Type reftype)
+		public static object Deserialize(string NFileData)
+		{
+			string[] Lines = NFileData.Split('\n');
+			List<object> Objects = new();
+			List<string> ObjectLines = new();
+			Dictionary<int,object> Values = new();
+			bool readingString = false;
+
+			int ObjectsHeaderLine = 0;
+			int ValuesHeaderLine = 0;
+
+			for (int i = 0; i < Lines.Length; i++)
+			{
+				if (Lines[i] == "#OBJECTS")
+				{ ObjectsHeaderLine = i + 1; }
+				else if (Lines[i] == "#VALUES")
+				{ ValuesHeaderLine = i + 1; break;}
+			}
+
+			for (int i = ValuesHeaderLine; i < Lines.Length - 1; i++)
+			{
+				string Line = Lines[i];
+				int NumberEnd = 0;
+				for (int j = 0; j < Line.Length; j++)
+				{
+					if (Line[j] == ':')
+					{ NumberEnd = j + 1; break; }
+				}
+				//Console.WriteLine(Line.Length);
+				//Console.WriteLine(NumberEnd);
+				//Console.WriteLine(Line);
+				char ValueType = Line[NumberEnd];
+
+				object Value = null;
+				if (ValueType == 'T')
+				{ Value = true; }
+				else if (ValueType == 'F')
+				{ Value = false; }
+				else if (ValueType == 'i')
+				{ Value = int.Parse(Line.Substring(NumberEnd + 1, Line.Length - 1 - NumberEnd)); }
+				else if (ValueType == 'f')
+				{ Value = float.Parse(Line.Substring(NumberEnd + 1, Line.Length - 1 - NumberEnd)); }
+
+				else if (ValueType == '"')
+				{ Value = Line.Substring(NumberEnd + 1, Line.Length - 2 - NumberEnd); }
+				else if (ValueType == '\'')
+				{ Value = Line[NumberEnd + 2]; }
+
+				else if (ValueType == 'd')
+				{ Value = double.Parse(Line.Substring(NumberEnd + 1, Line.Length - NumberEnd)); }
+				else if (ValueType == 'l')
+				{ Value = long.Parse(Line.Substring(NumberEnd + 1, Line.Length - NumberEnd)); }
+
+				else if (ValueType == 's')
+				{ Value = double.Parse(Line.Substring(NumberEnd + 1, Line.Length - NumberEnd)); }
+
+				else if (ValueType == 'I')
+				{ Value = long.Parse(Line.Substring(NumberEnd + 1, Line.Length - NumberEnd)); }
+				else if (ValueType == 'L')
+				{ Value = long.Parse(Line.Substring(NumberEnd + 1, Line.Length - NumberEnd)); }
+				else if (ValueType == 'S')
+				{ Value = long.Parse(Line.Substring(NumberEnd + 1, Line.Length - NumberEnd)); }
+
+				//Console.WriteLine(Line[NumberEnd]);
+				//Console.WriteLine("" + NumberEnd + ' ' + Line.Substring(0, NumberEnd));
+				Values.Add(int.Parse(Line.Substring(0, NumberEnd - 1)), Value);
+			}
+
+			int mixups = 0;
+			//Console.WriteLine("AAAAAAAAAAAAAAA " + (Lines.Length - ValuesHeaderLine));
+			for (int i = ObjectsHeaderLine; i < Lines.Length + ObjectsHeaderLine + 5 - ValuesHeaderLine; i++)
+			{
+				string Line = Lines[i];
+				int SeparatorIndex = 0;
+				int TypeEndIndex = 0;
+				bool HasProperties = false;
+				bool IsArray = false;
+
+				for (int j = 0; j < Line.Length; j++)
+				{
+					char c = Line[j];
+					if (c == '#')
+					{ SeparatorIndex = j; }
+					else if (c == '{')
+					{ TypeEndIndex = j - 1; break; }
+				}
+				if (TypeEndIndex == 0)
+				{
+					TypeEndIndex = Line.Length - 1;
+				}
+				else
+				{
+					HasProperties = true;
+				}
+
+				string AssemblyName = Line[..(SeparatorIndex)];
+				//Console.WriteLine(AssemblyName);
+				string TypeName = Line.Substring(SeparatorIndex + 1, TypeEndIndex - SeparatorIndex);
+				if (TypeName.EndsWith("[]"))
+				{
+					IsArray = true;
+					TypeName = Line.Substring(SeparatorIndex + 1, TypeEndIndex - SeparatorIndex - 2);
+				}
+
+
+				//Objects.Add(AssemblyName + ' ' + TypeName);
+
+				object NewObject = null;
+
+				if (TypeName == "System.String" && !IsArray)
+				{
+					NewObject = "";
+				}
+				else if (TypeName == "System.Int32" && !IsArray)
+				{
+					NewObject = 0;
+				}
+				else if (TypeName == "System.Single" && !IsArray)
+				{
+					NewObject = 0.0f;
+				}
+				else if (TypeName == "System.Boolean" && !IsArray)
+				{
+					NewObject = true;
+				}
+				else
+				{
+					if (IsArray)
+					{
+						string[] PropertyStrings2 = Line.Substring(TypeEndIndex + 2, Line.Length - TypeEndIndex - 3).Split(',');
+						NewObject = Array.CreateInstance(Type.GetType(TypeName), PropertyStrings2.Length);
+					}
+					else
+					{ NewObject = Activator.CreateInstance(AssemblyName, TypeName).Unwrap(); }
+				}
+				mixups++;
+
+				//if (NewObject == null)
+				//{ Console.WriteLine("object was null :("); }
+
+				Objects.Add(NewObject);
+				ObjectLines.Add(Line);
+
+			}
+
+			//Console.WriteLine("mixups: " + mixups);
+
+			//Console.WriteLine("Objects: " + Objects.Count);
+
+			//foreach (object obj in Objects)
+			//{
+			//	Console.WriteLine("Object: " + obj);
+			//}
+
+			for (int i = 0; i < Objects.Count; i++)
+			{
+				object NewObject = Objects.ToArray()[i];
+				string Line = ObjectLines.ToArray()[i];
+				//Console.WriteLine(Line);
+				int SeparatorIndex = 0;
+				int TypeEndIndex = 0;
+				bool HasProperties = false;
+				bool IsArray = NewObject.GetType().IsArray;
+
+				for (int j = 0; j < Line.Length; j++)
+				{
+					char c = Line[j];
+					if (c == '#')
+					{ SeparatorIndex = j; }
+					else if (c == '{')
+					{ TypeEndIndex = j - 1; break; }
+				}
+				if (TypeEndIndex == 0)
+				{
+					TypeEndIndex = Line.Length - 1;
+				}
+				else
+				{
+					HasProperties = true;
+				}
+
+				if (HasProperties && !IsArray)
+				{
+					string[] PropertyStrings = Line.Substring(TypeEndIndex + 2, Line.Length - TypeEndIndex - 3).Split(';');
+					foreach (string str in PropertyStrings)
+					{
+
+						//Console.WriteLine("stringle: " + str);
+						int NumberSplit = str.LastIndexOf(':');
+						//Console.WriteLine(NumberSplit);
+						//Console.WriteLine(str.Substring(1, NumberSplit - 2));
+						//Console.WriteLine(str[(NumberSplit + 1)..]);
+						//Console.WriteLine(NewObject);
+						//Console.WriteLine(NewObject.GetType().GetFields().Length);
+						//foreach (FieldInfo prop in NewObject.GetType().GetFields())
+						//{
+						//	Console.WriteLine(prop.Name);
+						//}
+						string ValString = str[(NumberSplit + 1)..];
+						if (ValString.StartsWith('o'))
+						{
+							ValString = ValString[1..];
+							//Console.WriteLine(ValString);
+							NewObject.GetType().GetField(str.Substring(1, NumberSplit - 2), BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance).SetValue(NewObject, Objects.ElementAt(Int32.Parse(ValString)));
+						}
+						else
+						{
+							//Console.WriteLine(Values[Int32.Parse(ValString)]);
+							//Console.WriteLine(NewObject == null);
+							//Console.WriteLine(str.Substring(1, NumberSplit - 2));
+							NewObject.GetType().GetField(str.Substring(1, NumberSplit - 2),BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance).SetValue(NewObject, Values[Int32.Parse(ValString)]);
+							//Console.WriteLine("RAAAAAAGH");
+						}
+					}
+
+				}
+				else if (IsArray)
+				{
+					string[] PropertyStrings = Line.Substring(TypeEndIndex + 2, Line.Length - TypeEndIndex - 3).Split(',');
+					Array array = ((Array)NewObject); //Array.CreateInstance(NewObject.GetType(), PropertyStrings.Length);
+					//Console.WriteLine("array length = " + array.Length);
+
+					//Console.WriteLine(NewObject.GetType());
+					//Console.WriteLine(array.GetType());
+					int j = 0;
+					if (isStandardArray(array.GetType()))
+					{
+						foreach (string str in PropertyStrings)
+						{
+							//Console.WriteLine((Objects.ElementAt(Int32.Parse(str)).Key.GetType()));
+							//Console.WriteLine(j);
+							//Console.WriteLine("array length = " + array.Length);
+							//Console.WriteLine(Values[Int32.Parse(str)]);
+							//Console.WriteLine(array);
+							array.SetValue(Values[Int32.Parse(str)], j);
+							j++;
+							break;
+						}
+					}
+					else
+					{
+						foreach (string str in PropertyStrings)
+						{
+							//Console.WriteLine((Objects.ElementAt(Int32.Parse(str)).Key.GetType()));
+							//Console.WriteLine(j);
+							//Console.WriteLine("array length = " + array.Length);
+							//Console.WriteLine((Objects.ElementAt(Int32.Parse(str))));
+							//Console.WriteLine(array);
+							array.SetValue(Objects.ElementAt(Int32.Parse(str)), j);
+							j++;
+							break;
+						}
+					}
+				}
+			}
+		
+			
+			/*for (int i = 0; i < Objects.Count; i++)
+			{
+				Console.WriteLine(Objects.Keys.ToArray()[i]);
+			}*/
+
+			return Objects.ToArray()[0];
+		}
+	
+		
+	
+
+		protected static bool isStandardType(Type reftype)
 		{
 			if (
 
@@ -90,6 +364,29 @@ namespace namspone
 						|| reftype == typeof(char)
 						|| reftype == typeof(bool)
 						|| reftype == typeof(string))
+			{
+				return true;
+			}
+			else
+				return false;
+
+		}
+
+		protected static bool isStandardArray(Type reftype)
+		{
+			if (
+
+						 reftype == typeof(int[])
+						|| reftype == typeof(float[])
+						|| reftype == typeof(double[])
+						|| reftype == typeof(short[])
+						|| reftype == typeof(long[])
+						|| reftype == typeof(uint[])
+						|| reftype == typeof(ulong[])
+						|| reftype == typeof(ushort[])
+						|| reftype == typeof(char[])
+						|| reftype == typeof(bool[])
+						|| reftype == typeof(string[]))
 			{
 				return true;
 			}
@@ -118,11 +415,11 @@ namespace namspone
 			{
 				fileString = "#DESC\n"
 				+ "CREATED:" + DateTime.Now.Year + 'y' + DateTime.Now.Month + 'm' + DateTime.Now.Day + 'd' + DateTime.Now.Hour + ':' + DateTime.Now.Minute + '\n'
-				+ "#OBJECTINDEX\n";
+				+ "#OBJECTS\n";
 				for (int i = 0; i < objects.Count; i++)
 				{
 					NObject obj = objects[i];
-					fileString += "" + i + ':' + obj.objAssembly + "#" + obj.objNamespace;
+					fileString += "" + obj.objAssembly + "#" + obj.objNamespace;
 					if (obj.thisObject.GetType().IsArray)
 					{
 						fileString += '{';
@@ -130,8 +427,16 @@ namespace namspone
 						//Console.WriteLine("array!!! " + enumerab.Length);
 						for (int p = 0; p < enumerab.Length; p++)
 						{
-							int indx = propertyList.IndexOf(enumerab.GetValue(p));
-							fileString += ("" + indx) + (p + 1 < enumerab.Length ? "," : "");
+							if (isStandardType(enumerab.GetValue(p).GetType()))
+							{
+								int indx = propertyList.IndexOf(enumerab.GetValue(p));
+								fileString += ("" + indx) + (p + 1 < enumerab.Length ? "," : "");
+							}
+							else
+							{
+								int indx = objects.FindIndex(x => x.thisObject == enumerab.GetValue(p));
+								fileString += ("" + indx) + (p + 1 < enumerab.Length ? "," : "");
+							}
 							arrayIndex++;
 						}
 						fileString += '}';
@@ -184,15 +489,15 @@ namespace namspone
 					}
 					else if (obj.GetType() == typeof(uint))
 					{
-						fileString += "" + i + ':' + 'u' + Convert.ToString(obj) + '\n';
+						fileString += "" + i + ':' + 'I' + Convert.ToString(obj) + '\n';
 					}
 					else if (obj.GetType() == typeof(ulong))
 					{
-						fileString += "" + i + ':' + "ul" + Convert.ToString(obj) + '\n';
+						fileString += "" + i + ':' + 'L' + Convert.ToString(obj) + '\n';
 					}
 					else if (obj.GetType() == typeof(ushort))
 					{
-						fileString += "" + i + ':' + "us" + Convert.ToString(obj) + '\n';
+						fileString += "" + i + ':' + 'S' + Convert.ToString(obj) + '\n';
 					}
 					else if (obj.GetType() == typeof(float))
 					{
@@ -211,36 +516,7 @@ namespace namspone
 
 				}
 
-				/*fileString += "#ARRAYDATA\n";
-				int arrayindx = 0;
-
-				for (int i = 0; i < objects.Count; i++)
-				{
-					NObject obj = objects[i];
-
-					if (obj.thisObject.GetType().IsArray)
-					{
-						fileString += "" + arrayindx;
-						arrayindx++;
-					}
-
-
-				}*/
-
-				/*for (int i = 0; i < objects.Length; i++)
-                {
-                    NObject obj = objects[i];
-
-                    if (obj.thisObject.GetType().IsArray)
-                    {
-                        fileString += "" + i + ":[";
-                        foreach (object val in obj.thisObject)
-                        {
-                            fileString += val
-                        }
-                    }
-                }*/
-
+			
 			}
 			else
 			{
@@ -263,7 +539,7 @@ namespace namspone
 
 			NObject nobj = new NObject(obj);
 
-			nobj.objNamespace = objType.FullName;
+			nobj.objNamespace = objType.Namespace + '.' + objType.Name;
 			nobj.objAssembly = objType.Assembly.GetName().Name;
 
 
@@ -275,7 +551,7 @@ namespace namspone
 				NObject ntarg = refedObjects.Find(b => b.thisObject == targ);
 
 				Type targType = targ.GetType();
-				ntarg.objNamespace = targType.FullName;
+				ntarg.objNamespace = targType.Namespace + '.' + targType.Name;
 				ntarg.objAssembly = targType.Assembly.GetName().Name;
 
 
