@@ -21,25 +21,7 @@ namespace namspone
 	}
 
 
-	internal class NObject
-	{
-		public string objNamespace { get; set; }
-		public string objAssembly { get; set; }
-		public object thisObject { get; set; }
-		public bool isArray { get; } = false;
-		public Dictionary<string, object> properties = new();
-
-		public NObject(object obj)
-		{
-			if (obj.GetType().IsArray)
-			{
-				isArray = true;
-			}
-			thisObject = obj;
-		}
-
-
-	}
+	
 
 	public class TestClass
 	{
@@ -47,7 +29,7 @@ namespace namspone
 		public int TestInteger = 5;
 		public TestClassSecond[] ClassArrayTest = { new(), new() };
 		public float TestFloat = 3.14f;
-		//public TestClassSecond testtwo = new();
+		public TestClassSecond testtwo = new();
 		public TestClass() { }
 	}
 
@@ -69,14 +51,32 @@ namespace namspone
 			stopwatch.Restart();
 			object woah = NFile.Deserialize(nfil.fileString);
 			stopwatch.Stop();
-			Console.WriteLine(((TestClass)woah).TestFloat);
 			Console.WriteLine("" + stopwatch.Elapsed.TotalSeconds + "s taken to deserialize.");
 		}
 	}
 
+
 	/// <summary> Neptune object Serialization. </summary>
 	public class NFile
 	{
+		internal class NObject
+		{
+			public string objNamespace { get; set; }
+			public string objAssembly { get; set; }
+			public object thisObject { get; set; }
+			public bool isArray { get; } = false;
+			public Dictionary<string, object> properties = new();
+
+			internal NObject(object obj)
+			{
+				if (obj.GetType().IsArray)
+				{
+					isArray = true;
+				}
+				thisObject = obj;
+			}
+		}
+
 		internal List<NObject> objects;
 		internal List<object> propertyList = new();
 		internal String fileString = "";
@@ -100,6 +100,7 @@ namespace namspone
 				{ ValuesHeaderLine = i + 1; break;}
 			}
 
+			// Index through the value lines to create the required values.
 			for (int i = ValuesHeaderLine; i < Lines.Length - 1; i++)
 			{
 				string Line = Lines[i];
@@ -109,9 +110,7 @@ namespace namspone
 					if (Line[j] == ':')
 					{ NumberEnd = j + 1; break; }
 				}
-				//Console.WriteLine(Line.Length);
-				//Console.WriteLine(NumberEnd);
-				//Console.WriteLine(Line);
+
 				char ValueType = Line[NumberEnd];
 
 				object Value = null;
@@ -144,14 +143,11 @@ namespace namspone
 				else if (ValueType == 'S')
 				{ Value = long.Parse(Line.Substring(NumberEnd + 1, Line.Length - NumberEnd)); }
 
-				//Console.WriteLine(Line[NumberEnd]);
-				//Console.WriteLine("" + NumberEnd + ' ' + Line.Substring(0, NumberEnd));
 				Values.Add(int.Parse(Line.Substring(0, NumberEnd - 1)), Value);
 			}
 
-			int mixups = 0;
-			//Console.WriteLine("AAAAAAAAAAAAAAA " + (Lines.Length - ValuesHeaderLine));
-			for (int i = ObjectsHeaderLine; i < Lines.Length + ObjectsHeaderLine + 5 - ValuesHeaderLine; i++)
+			// Index through the object lines.
+			for (int i = ObjectsHeaderLine; i < Lines.Length - (Lines.Length - ValuesHeaderLine) - 1; i++)
 			{
 				string Line = Lines[i];
 				int SeparatorIndex = 0;
@@ -177,7 +173,6 @@ namespace namspone
 				}
 
 				string AssemblyName = Line[..(SeparatorIndex)];
-				//Console.WriteLine(AssemblyName);
 				string TypeName = Line.Substring(SeparatorIndex + 1, TypeEndIndex - SeparatorIndex);
 				if (TypeName.EndsWith("[]"))
 				{
@@ -186,26 +181,31 @@ namespace namspone
 				}
 
 
-				//Objects.Add(AssemblyName + ' ' + TypeName);
 
 				object NewObject = null;
 
 				if (TypeName == "System.String" && !IsArray)
-				{
-					NewObject = "";
-				}
+				{ NewObject = ""; }
 				else if (TypeName == "System.Int32" && !IsArray)
-				{
-					NewObject = 0;
-				}
+				{ NewObject = 0; }
 				else if (TypeName == "System.Single" && !IsArray)
-				{
-					NewObject = 0.0f;
-				}
+				{ NewObject = 0.0f; }
 				else if (TypeName == "System.Boolean" && !IsArray)
-				{
-					NewObject = true;
-				}
+				{ NewObject = true; }
+				else if (TypeName == "System.Char" && !IsArray)
+				{ NewObject = '\0'; }
+				else if (TypeName == "System.UInt32" && !IsArray)
+				{ NewObject = 0u; }
+				else if (TypeName == "System.Double" && !IsArray)
+				{ NewObject = 0.0d; }
+				else if (TypeName == "System.Int16" && !IsArray)
+				{ NewObject = (short)0; }
+				else if (TypeName == "System.Int64" && !IsArray)
+				{ NewObject = 0L; }
+				else if (TypeName == "System.UInt16" && !IsArray)
+				{ NewObject = (ushort)0; }
+				else if (TypeName == "System.UInt64" && !IsArray)
+				{ NewObject = 0uL; }
 				else
 				{
 					if (IsArray)
@@ -214,32 +214,18 @@ namespace namspone
 						NewObject = Array.CreateInstance(Type.GetType(TypeName), PropertyStrings2.Length);
 					}
 					else
-					{ NewObject = Activator.CreateInstance(AssemblyName, TypeName).Unwrap(); }
+					{ NewObject = Activator.CreateInstance(AssemblyName, TypeName).Unwrap(); Console.WriteLine(NewObject == null); }
 				}
-				mixups++;
-
-				//if (NewObject == null)
-				//{ Console.WriteLine("object was null :("); }
 
 				Objects.Add(NewObject);
 				ObjectLines.Add(Line);
 
 			}
 
-			//Console.WriteLine("mixups: " + mixups);
-
-			//Console.WriteLine("Objects: " + Objects.Count);
-
-			//foreach (object obj in Objects)
-			//{
-			//	Console.WriteLine("Object: " + obj);
-			//}
-
 			for (int i = 0; i < Objects.Count; i++)
 			{
 				object NewObject = Objects.ToArray()[i];
 				string Line = ObjectLines.ToArray()[i];
-				//Console.WriteLine(Line);
 				int SeparatorIndex = 0;
 				int TypeEndIndex = 0;
 				bool HasProperties = false;
@@ -267,32 +253,16 @@ namespace namspone
 					string[] PropertyStrings = Line.Substring(TypeEndIndex + 2, Line.Length - TypeEndIndex - 3).Split(';');
 					foreach (string str in PropertyStrings)
 					{
-
-						//Console.WriteLine("stringle: " + str);
 						int NumberSplit = str.LastIndexOf(':');
-						//Console.WriteLine(NumberSplit);
-						//Console.WriteLine(str.Substring(1, NumberSplit - 2));
-						//Console.WriteLine(str[(NumberSplit + 1)..]);
-						//Console.WriteLine(NewObject);
-						//Console.WriteLine(NewObject.GetType().GetFields().Length);
-						//foreach (FieldInfo prop in NewObject.GetType().GetFields())
-						//{
-						//	Console.WriteLine(prop.Name);
-						//}
 						string ValString = str[(NumberSplit + 1)..];
 						if (ValString.StartsWith('o'))
 						{
 							ValString = ValString[1..];
-							//Console.WriteLine(ValString);
 							NewObject.GetType().GetField(str.Substring(1, NumberSplit - 2), BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance).SetValue(NewObject, Objects.ElementAt(Int32.Parse(ValString)));
 						}
 						else
 						{
-							//Console.WriteLine(Values[Int32.Parse(ValString)]);
-							//Console.WriteLine(NewObject == null);
-							//Console.WriteLine(str.Substring(1, NumberSplit - 2));
 							NewObject.GetType().GetField(str.Substring(1, NumberSplit - 2),BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance).SetValue(NewObject, Values[Int32.Parse(ValString)]);
-							//Console.WriteLine("RAAAAAAGH");
 						}
 					}
 
@@ -300,21 +270,12 @@ namespace namspone
 				else if (IsArray)
 				{
 					string[] PropertyStrings = Line.Substring(TypeEndIndex + 2, Line.Length - TypeEndIndex - 3).Split(',');
-					Array array = ((Array)NewObject); //Array.CreateInstance(NewObject.GetType(), PropertyStrings.Length);
-					//Console.WriteLine("array length = " + array.Length);
-
-					//Console.WriteLine(NewObject.GetType());
-					//Console.WriteLine(array.GetType());
+					Array array = ((Array)NewObject); 
 					int j = 0;
 					if (isStandardArray(array.GetType()))
 					{
 						foreach (string str in PropertyStrings)
 						{
-							//Console.WriteLine((Objects.ElementAt(Int32.Parse(str)).Key.GetType()));
-							//Console.WriteLine(j);
-							//Console.WriteLine("array length = " + array.Length);
-							//Console.WriteLine(Values[Int32.Parse(str)]);
-							//Console.WriteLine(array);
 							array.SetValue(Values[Int32.Parse(str)], j);
 							j++;
 							break;
@@ -324,11 +285,6 @@ namespace namspone
 					{
 						foreach (string str in PropertyStrings)
 						{
-							//Console.WriteLine((Objects.ElementAt(Int32.Parse(str)).Key.GetType()));
-							//Console.WriteLine(j);
-							//Console.WriteLine("array length = " + array.Length);
-							//Console.WriteLine((Objects.ElementAt(Int32.Parse(str))));
-							//Console.WriteLine(array);
 							array.SetValue(Objects.ElementAt(Int32.Parse(str)), j);
 							j++;
 							break;
@@ -336,13 +292,6 @@ namespace namspone
 					}
 				}
 			}
-		
-			
-			/*for (int i = 0; i < Objects.Count; i++)
-			{
-				Console.WriteLine(Objects.Keys.ToArray()[i]);
-			}*/
-
 			return Objects.ToArray()[0];
 		}
 	
@@ -395,21 +344,12 @@ namespace namspone
 
 		}
 
-
-		internal string Stringify(NObject targ)
-		{
-			string resultString = "";
-			resultString += targ.objNamespace + '+' + targ.objAssembly;
-			return resultString;
-		}
-
 		/// <summary> Finalize the Serialization and save it to a .NFile in the designated folder. </summary>
 		public void Save(string path, string name)
 		{
 			int arrayIndex = 0;
 			string fullpath = (path.EndsWith('\\') ? path : path + '\\') + name + ".NEPOBJ";
 			Dictionary<uint, object> values = new();
-			//FileStream fs = File.Create(fullpath);
 
 			if (fileString == "")
 			{
@@ -524,16 +464,10 @@ namespace namspone
 			}
 		}
 
-		//public NFile(Resource file)
-		//{
-
-		//}
-
 		/// <summary> Creates a new NFile for object Serialization. </summary>
 		public NFile(object obj)
 		{
 			List<NObject> refedObjects = new();
-			//List<object> arrayValues = new();
 
 			Type objType = obj.GetType();
 
@@ -594,7 +528,6 @@ namespace namspone
 
 
 					object refVal = info.GetValue(targ);
-					//Console.WriteLine(refVal);
 					Type reftype = refVal.GetType();
 					if (reftype.IsArray && reftype != typeof(int[])
 						&& reftype != typeof(float[])
@@ -613,7 +546,6 @@ namespace namspone
 						nobj.properties.Add(info.Name, refVal);
 						for (int i = 0; i < ((Array)refVal).Length; i++)
 						{
-							//refedObjects.Add(new NObject(refVal));
 							if (!refedObjects.Exists(x => x.thisObject == ((Array)refVal).GetValue(i)))
 							{
 								refedObjects.Add(new NObject(((Array)refVal).GetValue(i)));
@@ -635,11 +567,8 @@ namespace namspone
 						ntarg.properties.Add(info.Name, refVal);
 						for (int i = 0; i < ((Array)refVal).Length; i++)
 						{
-							//Console.WriteLine(i);
 							if (!refedObjects.Exists(x => x.thisObject == ((Array)refVal).GetValue(i)))
 							{
-								
-								//refedObjects.Add(new NObject(((Array)refVal).GetValue(i)));
 								if (!propertyList.Contains(((Array)refVal).GetValue(i)))
 								{ propertyList.Add(((Array)refVal).GetValue(i)); }
 							}
@@ -648,14 +577,12 @@ namespace namspone
 								ntarg.properties.Add(info.Name, ((Array)refVal).GetValue(i));
 								if (!propertyList.Contains(((Array)refVal).GetValue(i)))
 								{ propertyList.Add(((Array)refVal).GetValue(i)); }
-								//AnalyzeObject(((Array)refVal).GetValue(i));
 							}
 						}
 						AnalyzeObject(refVal);
 					}
 					else
 					{
-						//Console.WriteLine(refVal);
 						if (!refedObjects.Exists(x => x.thisObject == refVal))
 						{
 							refedObjects.Add(new NObject(refVal));
@@ -671,7 +598,6 @@ namespace namspone
 						}
 
 						AnalyzeObject(refVal);
-
 					}
 				}
 			}
@@ -728,12 +654,10 @@ namespace namspone
 						&& reftype != typeof(string[])
 						)
 				{
-					//Console.WriteLine("non default array!");
 					refedObjects.Add(new NObject(refVal));
 					nobj.properties.Add(info.Name, refVal);
 					for (int i = 0; i < ((Array)refVal).Length; i++)
 					{
-						//refedObjects.Add(new NObject(refVal));
 						if (!refedObjects.Exists(x => x.thisObject == ((Array)refVal).GetValue(i)))
 						{
 							refedObjects.Add(new NObject(((Array)refVal).GetValue(i)));
@@ -773,13 +697,6 @@ namespace namspone
 
 			objects = refedObjects;
 		}
-	}
-
-
-	public static class NSerializer
-	{
-
-
 	}
 
 }
