@@ -1,63 +1,20 @@
 ﻿using System.Reflection;
-using System.Diagnostics;
-using testingus;
 
-
-
-namespace namspone
+namespace NeptuneSerialzer
 {
 	/// <summary> Attribute used to force non-public properties to be Serialized. </summary>
 	[AttributeUsage(AttributeTargets.All)]
 	public class NSerialize : Attribute
-	{
-
-	}
+	{ }
 
 	/// <summary> Attribute used to force public properties to be ignored during Serialization. </summary>
 	[AttributeUsage(AttributeTargets.All)]
 	public class NIgnore : Attribute
-	{
-
-	}
-
-
-	
-
-	public class TestClass
-	{
-		public string TestString = "Hello!";
-		public int TestInteger = 5;
-		public TestClassSecond[] ClassArrayTest = { new(), new() };
-		public float TestFloat = 3.14f;
-		public TestClassSecond testtwo = new();
-		public TestClass() { }
-	}
-
-
-
-
-	public static class Program
-	{
-		static void Main()
-		{
-			TestClass testcloss = new TestClass();
-			testcloss.TestFloat = 52.50f;
-			Stopwatch stopwatch = Stopwatch.StartNew();
-			NFile nfil = new NFile(testcloss);
-			nfil.Save("test", "test");
-			stopwatch.Stop();
-			Console.WriteLine(nfil.fileString);
-			Console.WriteLine("" + stopwatch.Elapsed.TotalSeconds + "s taken to serialize.");
-			stopwatch.Restart();
-			object woah = NFile.Deserialize(nfil.fileString);
-			stopwatch.Stop();
-			Console.WriteLine("" + stopwatch.Elapsed.TotalSeconds + "s taken to deserialize.");
-		}
-	}
+	{ }
 
 
 	/// <summary> Neptune object Serialization. </summary>
-	public class NFile
+	public static class NSerializer
 	{
 		internal class NObject
 		{
@@ -77,10 +34,16 @@ namespace namspone
 			}
 		}
 
-		internal List<NObject> objects;
-		internal List<object> propertyList = new();
-		internal String fileString = "";
-
+		// Saves the fileContent to a new .NFile in the given path with the desired name.
+		public static void SaveToNFile(string name, string path, string fileContent)
+		{
+			string fullpath = (path.EndsWith('\\') ? path : path + '\\') + name + ".NEPOBJ";
+			StreamWriter fs = File.CreateText(fullpath);
+			fs.Write(fileContent);
+			fs.Close();
+		}
+		
+		// Converts a NFile string back into an object.
 		public static object Deserialize(string NFileData)
 		{
 			string[] Lines = NFileData.Split('\n');
@@ -129,19 +92,19 @@ namespace namspone
 				{ Value = Line[NumberEnd + 2]; }
 
 				else if (ValueType == 'd')
-				{ Value = double.Parse(Line.Substring(NumberEnd + 1, Line.Length - NumberEnd)); }
+				{ Value = double.Parse(Line.Substring(NumberEnd + 1, Line.Length - NumberEnd - 1)); }
 				else if (ValueType == 'l')
-				{ Value = long.Parse(Line.Substring(NumberEnd + 1, Line.Length - NumberEnd)); }
+				{ Value = long.Parse(Line.Substring(NumberEnd + 1, Line.Length - NumberEnd - 1)); }
 
 				else if (ValueType == 's')
-				{ Value = double.Parse(Line.Substring(NumberEnd + 1, Line.Length - NumberEnd)); }
+				{ Value = double.Parse(Line.Substring(NumberEnd + 1, Line.Length - NumberEnd - 1)); }
 
 				else if (ValueType == 'I')
-				{ Value = long.Parse(Line.Substring(NumberEnd + 1, Line.Length - NumberEnd)); }
+				{ Value = uint.Parse(Line.Substring(NumberEnd + 1, Line.Length - NumberEnd - 1)); }
 				else if (ValueType == 'L')
-				{ Value = long.Parse(Line.Substring(NumberEnd + 1, Line.Length - NumberEnd)); }
+				{ Value = ulong.Parse(Line.Substring(NumberEnd + 1, Line.Length - NumberEnd - 1)); }
 				else if (ValueType == 'S')
-				{ Value = long.Parse(Line.Substring(NumberEnd + 1, Line.Length - NumberEnd)); }
+				{ Value = ushort.Parse(Line.Substring(NumberEnd + 1, Line.Length - NumberEnd - 1)); }
 
 				Values.Add(int.Parse(Line.Substring(0, NumberEnd - 1)), Value);
 			}
@@ -203,7 +166,7 @@ namespace namspone
 				else if (TypeName == "System.Int64" && !IsArray)
 				{ NewObject = 0L; }
 				else if (TypeName == "System.UInt16" && !IsArray)
-				{ NewObject = (ushort)0; }
+				{ NewObject = ((ushort)0); }
 				else if (TypeName == "System.UInt64" && !IsArray)
 				{ NewObject = 0uL; }
 				else
@@ -214,7 +177,7 @@ namespace namspone
 						NewObject = Array.CreateInstance(Type.GetType(TypeName), PropertyStrings2.Length);
 					}
 					else
-					{ NewObject = Activator.CreateInstance(AssemblyName, TypeName).Unwrap(); Console.WriteLine(NewObject == null); }
+					{ NewObject = Activator.CreateInstance(AssemblyName, TypeName).Unwrap(); }
 				}
 
 				Objects.Add(NewObject);
@@ -298,7 +261,7 @@ namespace namspone
 		
 	
 
-		protected static bool isStandardType(Type reftype)
+		private static bool isStandardType(Type reftype)
 		{
 			if (
 
@@ -321,10 +284,9 @@ namespace namspone
 
 		}
 
-		protected static bool isStandardArray(Type reftype)
+		private static bool isStandardArray(Type reftype)
 		{
 			if (
-
 						 reftype == typeof(int[])
 						|| reftype == typeof(float[])
 						|| reftype == typeof(double[])
@@ -341,14 +303,14 @@ namespace namspone
 			}
 			else
 				return false;
-
 		}
 
 		/// <summary> Finalize the Serialization and save it to a .NFile in the designated folder. </summary>
-		public void Save(string path, string name)
+		private static string GetString(List<NObject> objects, List<object> propertyList)
 		{
+			string fileString = "";
+
 			int arrayIndex = 0;
-			string fullpath = (path.EndsWith('\\') ? path : path + '\\') + name + ".NEPOBJ";
 			Dictionary<uint, object> values = new();
 
 			if (fileString == "")
@@ -364,7 +326,6 @@ namespace namspone
 					{
 						fileString += '{';
 						Array enumerab = (Array)obj.thisObject;
-						//Console.WriteLine("array!!! " + enumerab.Length);
 						for (int p = 0; p < enumerab.Length; p++)
 						{
 							if (isStandardType(enumerab.GetValue(p).GetType()))
@@ -405,49 +366,49 @@ namespace namspone
 				for (int i = 0; i < propertyList.Count; i++)
 				{
 					object obj = propertyList[i];
+					Type objType = obj.GetType();
 
-
-					if (obj.GetType() == typeof(string))
+					if (objType == typeof(string))
 					{
 						fileString += "" + i + ':' + '"' + (string)obj + '"' + '\n';
 					}
-					else if (obj.GetType() == typeof(char))
+					else if (objType == typeof(char))
 					{
 						fileString += "" + i + ':' + '\'' + (char)obj + '\'' + '\n';
 					}
-					else if (obj.GetType() == typeof(int))
+					else if (objType == typeof(int))
 					{
 						fileString += "" + i + ':' + 'i' + Convert.ToString(obj) + '\n';
 					}
-					else if (obj.GetType() == typeof(long))
+					else if (objType == typeof(long))
 					{
 						fileString += "" + i + ':' + 'l' + Convert.ToString(obj) + '\n';
 					}
-					else if (obj.GetType() == typeof(short))
+					else if (objType == typeof(short))
 					{
 						fileString += "" + i + ':' + 's' + Convert.ToString(obj) + '\n';
 					}
-					else if (obj.GetType() == typeof(uint))
+					else if (objType == typeof(uint))
 					{
 						fileString += "" + i + ':' + 'I' + Convert.ToString(obj) + '\n';
 					}
-					else if (obj.GetType() == typeof(ulong))
+					else if (objType == typeof(ulong))
 					{
 						fileString += "" + i + ':' + 'L' + Convert.ToString(obj) + '\n';
 					}
-					else if (obj.GetType() == typeof(ushort))
+					else if (objType == typeof(ushort))
 					{
 						fileString += "" + i + ':' + 'S' + Convert.ToString(obj) + '\n';
 					}
-					else if (obj.GetType() == typeof(float))
+					else if (objType == typeof(float))
 					{
 						fileString += "" + i + ':' + 'f' + Convert.ToString(obj) + '\n';
 					}
-					else if (obj.GetType() == typeof(double))
+					else if (objType == typeof(double))
 					{
 						fileString += "" + i + ':' + 'd' + Convert.ToString(obj) + '\n';
 					}
-					else if (obj.GetType() == typeof(bool))
+					else if (objType == typeof(bool))
 					{
 						fileString += "" + i + ':' + ((bool)obj == true ? 'T' : 'F') + '\n';
 					}
@@ -456,17 +417,19 @@ namespace namspone
 
 				}
 
-			
+				return fileString;
 			}
 			else
 			{
-
+				return fileString;
 			}
 		}
 
 		/// <summary> Creates a new NFile for object Serialization. </summary>
-		public NFile(object obj)
+		public static string Serialize(object obj)
 		{
+			List<NObject> objects;
+			List<object> propertyList = new();
 			List<NObject> refedObjects = new();
 
 			Type objType = obj.GetType();
@@ -487,8 +450,6 @@ namespace namspone
 				Type targType = targ.GetType();
 				ntarg.objNamespace = targType.Namespace + '.' + targType.Name;
 				ntarg.objAssembly = targType.Assembly.GetName().Name;
-
-
 
 				FieldInfo[] objValues = targType.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
 				foreach (FieldInfo info in objValues)
@@ -696,6 +657,8 @@ namespace namspone
 			}
 
 			objects = refedObjects;
+
+			return GetString(objects, propertyList);
 		}
 	}
 
